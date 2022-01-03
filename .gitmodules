@@ -1,0 +1,3 @@
+[submodule "submodules/skitscript/web-compiler-test-suite"]
+	path = submodules/skitscript/web-compiler-test-suite
+	url = https://github.com/skitscript/web-compiler-test-suite
