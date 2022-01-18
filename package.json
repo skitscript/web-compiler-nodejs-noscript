@@ -52,7 +52,7 @@
     "@skitscript/types-nodejs": "0.0.29"
   },
   "dependencies": {
-    "@skitscript/interpreter-nodejs": "0.0.4",
+    "@skitscript/interpreter-nodejs": "1.0.1",
     "object-hash": "2.2.0"
   }
 }
