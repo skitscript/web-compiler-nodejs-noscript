@@ -16,7 +16,7 @@
   "private": false,
   "license": "MIT",
   "devDependencies": {
-    "@skitscript/parser-nodejs": "0.0.14",
+    "@skitscript/parser-nodejs": "1.0.0",
     "@skitscript/types-nodejs": "0.0.29",
     "@types/jasmine": "3.10.2",
     "@types/node": "16.11.14",
