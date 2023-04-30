@@ -19,7 +19,7 @@
     "node_modules": true,
     "**/*.js": true,
     "**/*.d.ts": true,
-    ".nyc_output": true
+    "coverage": true
   },
   "typescript.tsdk": "./node_modules/typescript.lib"
 }

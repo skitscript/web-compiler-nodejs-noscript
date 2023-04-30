@@ -6,13 +6,13 @@ jobs:
     strategy:
       matrix:
         os: [
+          ubuntu-22.04,
           ubuntu-20.04,
-          ubuntu-18.04,
+          macos-13,
+          macos-12,
           macos-11,
-          macos-10.15,
           windows-2022,
           windows-2019,
-          windows-2016
         ]
     steps:
     - uses: actions/checkout@v2
@@ -25,7 +25,7 @@ jobs:
     - run: npm ci
     - run: npm run-script buildLint
     - run: npm run-script buildTypeScript
-    - run: npm run-script buildNyc
+    - run: npm run-script buildC8
   release:
     if: github.event_name == 'release' && github.event.action == 'created'
     needs: test

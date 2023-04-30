@@ -10,13 +10,13 @@ including no Javascript in its output.
 This is a NPM package.  It targets NodeJS 16.11.1 or newer on the following
 operating systems:
 
+- Ubuntu 22.04
 - Ubuntu 20.04
-- Ubuntu 18.04
+- macOS 13 (Ventura)
+- macOS 12 (Monterey)
 - macOS 11 (Big Sur)
-- macOS 10.15 (Catalina)
 - Windows Server 2022
 - Windows Server 2019
-- Windows Server 2016
 
 It is likely also possible to use this package as part of a web browser
 application through tools such as [webpack](https://webpack.js.org/).  This has
