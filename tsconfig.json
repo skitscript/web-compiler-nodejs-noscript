@@ -7,7 +7,6 @@
     "allowUnusedLabels": false,
     "alwaysStrict": true,
     "assumeChangesOnlyAffectDirectDependencies": false,
-    "charset": "utf8",
     "composite": false,
     "declaration": true,
     "declarationMap": false,
@@ -25,7 +24,6 @@
     "experimentalDecorators": true,
     "forceConsistentCasingInFileNames": true,
     "importHelpers": false,
-    "importsNotUsedAsValues": "error",
     "incremental": false,
     "inlineSourceMap": false,
     "inlineSources": false,
@@ -33,7 +31,6 @@
     "jsx": "preserve",
     "jsxFactory": "React.createElement",
     "jsxFragmentFactory": "React.Fragment",
-    "keyofStringsOnly": true,
     "lib": [
       "ES2020"
     ],
