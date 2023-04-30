@@ -58,4 +58,41 @@ npm install --save-dev @skitscript/web-compiler-nodejs-noscript @skitscript/type
 
 ## Usage
 
-TODO
+Call `compile` to build a HTML document.  You will need to provide a file system adapter:
+
+```typescript
+import { compile } from "@skitscript/web-compiler-nodejs-noscript";
+
+const fileSystem = {
+  async readFile (path: readonly string[], encoding: 'utf-8'): Promise<string> {
+    // Example arguments:
+    // - ["index.skitscript"], "utf-8".
+    // - ["index.sass"], "utf-8".
+    // - ["index.pug"], "utf-8".
+    // - ["characters", "example-character-name", "emotes", "example-emote-name.svg"], "utf-8".
+    // - ["backgrounds", "example-background-name.svg"], "utf-8".
+
+    // Read the file from disk here, or throw an exception if it is not possible to read it.
+    return "The content of the file"
+  },
+  async writeFile (path: readonly string[], encoding: 'utf-8', data: string): Promise<void> {
+    // Example arguments:
+    // - ["index.html"], "utf-8", "<html>example</html>".
+
+    // Write the file to disk here.
+  }
+}
+
+// On success, this will write "index.html" then resolve.
+// On failure, this will throw without writing anything.
+const compiled = await compile(fileSystem)
+
+// Given a list of the paths which may have changed (created, updated, deleted, etc.).
+// On success, this will write "index.html" if its content likely changed or it previously failed to recompile, then resolve.
+// On failure, this will throw without writing anything.  It is safe to attempt another recompile.
+// Only one recompile will run at a time - calls while a previous recompile is still in progress will enter a queue.
+await compiled.recompile([
+  ["characters", "example-character-name", "emotes", "example-emote-name.svg"],
+  ["backgrounds", "example-background-name.svg"]
+])
+```
