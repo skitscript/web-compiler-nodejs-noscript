@@ -1,7 +1,24 @@
-import { type WebState, type Path, type ValidMap, type WebCharacter, type WebBackground } from '@skitscript/types-nodejs'
+import { WebState, type Path, type ValidMap, type WebCharacter, type WebBackground, type MapState } from '@skitscript/types-nodejs'
+import { Data } from '../Data'
+import { State } from '../State'
 
-export const transpileMap = (_map: ValidMap): { readonly data: Omit<WebData, 'css'>, readonly sassLines: readonly string[], readonly svgPaths: readonly Path[] } => {
-  const states: WebState[] = []
+const remapStateIndex = (stateIndex: number, mapStatesLength: number): number => stateIndex > 0 ? stateIndex - 1 : mapStatesLength - 1
+
+export const transpileMap = (map: ValidMap): { readonly data: Data, readonly sassLines: readonly string[], readonly svgPaths: readonly Path[] } => {
+  const reorderedMapStates = [...map.states.slice(1), map.states[0] as MapState]
+    .map(mapState => ({
+      ...mapState,
+      interaction: mapState.interaction.type === 'dismiss'
+        ? { ...mapState.interaction, stateIndex: remapStateIndex(mapState.interaction.stateIndex, map.states.length) }
+        : {
+            ...mapState.interaction,
+            options: mapState.interaction.options.map(mapStateOption => ({
+              ...mapStateOption,
+              stateIndex: remapStateIndex(mapStateOption.stateIndex, map.states.length)
+            }))
+          }
+    }))
+
   const characters: WebCharacter[] = []
   const backgrounds: WebBackground[] = []
 
@@ -14,9 +31,14 @@ export const transpileMap = (_map: ValidMap): { readonly data: Omit<WebData, 'cs
   //   }
   // }
 
+  const nextUniqueId = 0
+
+    const states = reorderedMapStates.map((mapState): State => ({
+
+    }))
+
   return {
     data: {
-      javascript: '',
       states,
       characters,
       backgrounds
