@@ -1,13 +1,13 @@
 import { parse } from '@skitscript/parser-nodejs'
 import { map } from '@skitscript/mapper-nodejs'
-import type { MapCharacter, MapState, MapStateCharacter } from '@skitscript/types-nodejs'
+import type { FileSystem, MapCharacter, MapState, MapStateCharacter, Path } from '@skitscript/types-nodejs'
 import { type compileTemplate, compile as compilePug } from 'pug'
-import { minify } from 'html-minifier'
-import { optimize } from 'svgo'
 import { compileString } from 'sass'
-import { XMLBuilder, XMLParser } from 'fast-xml-parser'
 import { join } from 'path'
-import { escape } from 'html-escaper'
+import { minifyHtml } from './minify-html'
+import { minifySvg } from './minify-svg'
+import { separateAttributesAndContentOfSvg } from './separate-attributes-and-content-of-svg'
+import { convertRunsToHtml } from './convert-runs-to-html'
 
 const characterSet = 'abcdefghijklmnopqrstuvwxyz'
 
@@ -30,32 +30,15 @@ const stringifyNumber = (number: number): string => {
   return output
 }
 
-const xmlSettings = {
-  preserveOrder: true,
-  ignoreAttributes: false,
-  attributeNamePrefix: ''
-}
-
-const xmlParser = new XMLParser(xmlSettings)
-const xmlBuilder = new XMLBuilder(xmlSettings)
-
-type Path = readonly string[]
-
-interface FileSystem {
-  readFile: (path: Path, encoding: 'utf-8') => Promise<string>
-  writeFile: ((path: Path, encoding: 'utf-8', data: string) => Promise<void>) & ((path: Path, encoding: null, data: Buffer) => Promise<void>)
-}
-
 /**
- *
- * @param fileSystem
- * @returns
+ * Compiles a SkitScript document once.
+ * @param fileSystem The filesystem to use.  Source files will be read from this, then build artifacts will be written back to it.
+ * @returns An object which can be used to run additional build(s).
  */
 export const compile = async (fileSystem: FileSystem): Promise<{
   /**
-   *
-   * @param changes
-   * @returns
+   * Runs an additional build.
+   * @param changes The path(s) to the file(s) which were deleted or changed.
    */
   readonly recompile: (changes: readonly Path[]) => Promise<void>
 }> => {
@@ -176,7 +159,7 @@ export const compile = async (fileSystem: FileSystem): Promise<{
       let anySvgsChanged = false
 
       const loadSass = async (): Promise<void> => {
-        sass = await fileSystem.readFile(['index.sass'], 'utf-8')
+        sass = await fileSystem.readUtf8EncodedTextFile(['index.sass'])
       }
 
       const generateCss = (): void => {
@@ -191,60 +174,9 @@ export const compile = async (fileSystem: FileSystem): Promise<{
         anySvgsChanged = changedSvgPaths.length > 0
 
         await Promise.all(changedSvgPaths.map(async svg => {
-          const text = await fileSystem.readFile(svg, 'utf-8')
-
-          const optimized = optimize(text, {
-            multipass: true,
-            plugins: [
-              'cleanupAttrs',
-              'cleanupEnableBackground',
-              'cleanupIds',
-              {
-                name: 'cleanupListOfValues', params: { floatPrecision: 0 }
-              },
-              { name: 'cleanupNumericValues', params: { floatPrecision: 0 } },
-              'collapseGroups',
-              'convertColors',
-              'convertEllipseToCircle',
-              { name: 'convertPathData', params: { floatPrecision: 0 } },
-              'convertShapeToPath',
-              'convertStyleToAttrs',
-              { name: 'convertTransform', params: { floatPrecision: 0 } },
-              'inlineStyles',
-              { name: 'mergePaths', params: { floatPrecision: 0 } },
-              'mergeStyles',
-              'minifyStyles',
-              'moveElemsAttrsToGroup',
-              'moveGroupAttrsToElems',
-              'removeComments',
-              'removeDesc',
-              'removeDoctype',
-              'removeEditorsNSData',
-              'removeEmptyAttrs',
-              'removeEmptyContainers',
-              'removeEmptyText',
-              'removeHiddenElems',
-              'removeMetadata',
-              'removeNonInheritableGroupAttrs',
-              'removeOffCanvasPaths',
-              'removeScriptElement',
-              'removeTitle',
-              'removeUnknownsAndDefaults',
-              'removeUnusedNS',
-              'removeUselessDefs',
-              'removeUselessStrokeAndFill',
-              'removeDimensions',
-              'removeXMLNS',
-              'removeXMLProcInst',
-              'reusePaths'
-            ]
-          })
-
-          const parsed = xmlParser.parse(optimized.data)
-          const attributes = parsed[0][':@']
-          const content = xmlBuilder.build(parsed[0].svg)
-
-          svgs.push({ path: svg, attributes, content })
+          const text = await fileSystem.readUtf8EncodedTextFile(svg)
+          const optimized = minifySvg(text)
+          svgs.push({ path: svg, ...separateAttributesAndContentOfSvg(optimized) })
         }))
       }
 
@@ -252,7 +184,7 @@ export const compile = async (fileSystem: FileSystem): Promise<{
         initialPromises.push((async () => {
           const skitscriptPromises: Array<Promise<void>> = [
             (async () => {
-              const text = await fileSystem.readFile(['index.skitscript'], 'utf-8')
+              const text = await fileSystem.readUtf8EncodedTextFile(['index.skitscript'])
               const parsed = parse(text)
 
               switch (parsed.type) {
@@ -291,46 +223,7 @@ export const compile = async (fileSystem: FileSystem): Promise<{
                       const states: State[] = []
 
                       for (const state of reorderedStates) {
-                        let content = ''
-
                         // TODO: menu support
-
-                        if (state.state.line !== null) {
-                          // TODO recurse to find shortest version
-                          // TODO is there an optimal ordering
-                          const stack: Array<'em' | 'strong' | 'code'> = []
-
-                          for (const run of [...state.state.line, { bold: false, italic: false, code: false, plainText: '' }]) {
-                            while (stack.includes('strong') && !run.bold) {
-                              content += `</${stack.pop() as string}>`
-                            }
-
-                            while (stack.includes('em') && !run.italic) {
-                              content += `</${stack.pop() as string}>`
-                            }
-
-                            while (stack.includes('code') && !run.code) {
-                              content += `</${stack.pop() as string}>`
-                            }
-
-                            if (run.bold && !stack.includes('strong')) {
-                              content += '<strong>'
-                              stack.push('strong')
-                            }
-
-                            if (run.italic && !stack.includes('em')) {
-                              content += '<em>'
-                              stack.push('em')
-                            }
-
-                            if (run.code && !stack.includes('code')) {
-                              content += '<code>'
-                              stack.push('code')
-                            }
-
-                            content += escape(run.plainText)
-                          }
-                        }
 
                         states.push({
                           state: state.state,
@@ -341,7 +234,7 @@ export const compile = async (fileSystem: FileSystem): Promise<{
                               ? state.state.interaction.stateIndex === 0 ? '' : `#${(reorderedStates[state.state.interaction.stateIndex - 1] as ReorderedState).id}`
                               : null
                           },
-                          content
+                          content: state.state.line === null ? '' : convertRunsToHtml(state.state.line)
                         })
                       }
 
@@ -594,7 +487,7 @@ export const compile = async (fileSystem: FileSystem): Promise<{
 
       if (pugTemplateChanged) {
         initialPromises.push((async () => {
-          const text = await fileSystem.readFile(['index.pug'], 'utf-8')
+          const text = await fileSystem.readUtf8EncodedTextFile(['index.pug'])
           pugTemplate = compilePug(text)
         })())
       }
@@ -648,40 +541,7 @@ export const compile = async (fileSystem: FileSystem): Promise<{
           })
         })
 
-        const minifiedHtml = minify(html, {
-          caseSensitive: false,
-          collapseBooleanAttributes: true,
-          collapseInlineTagWhitespace: true,
-          collapseWhitespace: true,
-          conservativeCollapse: false,
-          decodeEntities: true,
-          html5: true,
-          includeAutoGeneratedTags: false,
-          keepClosingSlash: false,
-          minifyCSS: true,
-          minifyJS: false,
-          minifyURLs: false,
-          preserveLineBreaks: false,
-          preventAttributesEscaping: false,
-          processConditionalComments: false,
-          removeAttributeQuotes: true,
-          removeComments: true,
-          removeEmptyAttributes: true,
-
-          // SVG often includes empty elements.
-          removeEmptyElements: false,
-          removeOptionalTags: true,
-          removeRedundantAttributes: true,
-          removeScriptTypeAttributes: true,
-          removeStyleLinkTypeAttributes: true,
-          removeTagWhitespace: true,
-          sortAttributes: true,
-          sortClassName: true,
-          trimCustomFragments: true,
-          useShortDoctype: true
-        })
-
-        await fileSystem.writeFile(['index.html'], 'utf-8', minifiedHtml)
+        await fileSystem.writeUtf8EncodedTextFile(['index.html'], minifyHtml(html))
       }
     }
   }
