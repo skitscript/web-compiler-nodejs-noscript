@@ -31,8 +31,8 @@
   "types": "index.d.ts",
   "sideEffects": false,
   "dependencies": {
-    "@skitscript/mapper-nodejs": "^1.0.2",
-    "@skitscript/parser-nodejs": "^1.0.2",
+    "@skitscript/mapper-nodejs": "^1.0.4",
+    "@skitscript/parser-nodejs": "^1.0.4",
     "fast-xml-parser": "^4.2.2",
     "html-escaper": "^3.0.3",
     "html-minifier": "^4.0.0",
@@ -40,10 +40,8 @@
     "sass": "^1.62.1",
     "svgo": "^3.0.2"
   },
-  "peerDependencies": {
-    "@skitscript/types-nodejs": "^2.0.1"
-  },
   "devDependencies": {
+    "@skitscript/types-nodejs": "^5.0.0",
     "@types/html-escaper": "^3.0.0",
     "@types/html-minifier": "^4.0.2",
     "@types/node": "^18.16.3",
