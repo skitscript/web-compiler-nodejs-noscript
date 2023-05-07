@@ -9,27 +9,6 @@ import { minifySvg } from './minify-svg'
 import { separateAttributesAndContentOfSvg } from './separate-attributes-and-content-of-svg'
 import { convertRunsToHtml } from './convert-runs-to-html'
 
-const characterSet = 'abcdefghijklmnopqrstuvwxyz'
-
-const stringifyNumber = (number: number): string => {
-  if (number === 0) {
-    return 'a'
-  }
-
-  let output = ''
-
-  while (number > 0) {
-    const remainder = number % characterSet.length
-
-    output = `${characterSet.charAt(remainder)}${output}`
-
-    number -= remainder
-    number /= characterSet.length
-  }
-
-  return output
-}
-
 /**
  * Compiles a SkitScript document once.
  * @param fileSystem The filesystem to use.  Source files will be read from this, then build artifacts will be written back to it.
