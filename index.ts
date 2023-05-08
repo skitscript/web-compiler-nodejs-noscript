@@ -1,14 +1,15 @@
 import { parse } from '@skitscript/parser-nodejs'
 import { map } from '@skitscript/mapper-nodejs'
-import type { FileSystem, MapCharacter, MapState, MapStateCharacter, Path, WebBackground, WebCharacter, WebData, WebState } from '@skitscript/types-nodejs'
+import type { FileSystem, Path, WebBackground, WebCharacter, WebData, WebEmote, WebImage } from '@skitscript/types-nodejs'
 import { type compileTemplate, compile as compilePug } from 'pug'
 import { compileString } from 'sass'
 import { join } from 'path'
-import { minifyHtml } from './minify-html'
-import { minifySvg } from './minify-svg'
-import { separateAttributesAndContentOfSvg } from './separate-attributes-and-content-of-svg'
-import { convertRunsToHtml } from './convert-runs-to-html'
+import { minifyHtml } from './minifyHtml'
 import { transpileMap } from './transpile-map'
+import { type Data } from './Data'
+import { minifySvg } from './minifySvg'
+import { separateAttributesAndContentOfSvg } from './separate-attributes-and-content-of-svg'
+import { type Image } from './Image'
 
 /**
  * Compiles a SkitScript document once.
@@ -22,9 +23,7 @@ export const compile = async (fileSystem: FileSystem): Promise<{
    */
   readonly recompile: (changes: readonly Path[]) => Promise<void>
 }> => {
-  let data: null | Omit<WebData, 'css'>
-  let sassLines: null | readonly string[] = null
-  let svgPaths: null | readonly Path[] = null
+  let data: null | Data
   let pugTemplate: null | compileTemplate = null
   let sass: null | string = null
   let css: null | string = null
@@ -37,14 +36,18 @@ export const compile = async (fileSystem: FileSystem): Promise<{
 
   const svgs: Svg[] = []
 
-  const getSvgByPath = (path: Path): Svg => {
-    const output = svgs.find(svg => svg.path.length === path.length && svg.path.every((item, index) => path[index] === item))
+  const convertImage = (image: Image): WebImage => {
+    const svg = svgs.find(svg => svg.path.length === image.path.length && svg.path.every((item, index) => image.path[index] === item))
 
-    if (output === undefined) {
-      throw new Error(`Unable to find SVG "${join(...path)}".`)
+    if (svg === undefined) {
+      throw new Error(`Unable to find SVG "${join(...image.path)}".`)
     }
 
-    return output
+    return {
+      tagName: 'svg',
+      attributes: { ...image.element.attributes, ...svg.attributes },
+      content: { html: svg.content }
+    }
   }
 
   const output = {
@@ -56,8 +59,6 @@ export const compile = async (fileSystem: FileSystem): Promise<{
       if (skitscriptChanged) {
         data = null
         css = null
-        sassLines = null
-        svgPaths = null
       }
 
       if (pugTemplateChanged) {
@@ -81,28 +82,39 @@ export const compile = async (fileSystem: FileSystem): Promise<{
 
       const initialPromises: Array<Promise<void>> = []
 
-      const anySvgsChanged = false
+      let anySvgsChanged = false
 
       const loadSass = async (): Promise<void> => {
         sass = await fileSystem.readUtf8EncodedTextFile(['index.sass'])
       }
 
       const generateCss = (): void => {
-        css = compileString([sass as string, ...(sassLines as readonly string[])].join('\n'), { syntax: 'indented' }).css
+        css = compileString(`${sass as string}\n${(data as Data).sass}`, { syntax: 'indented' }).css
         // TODO: minify
       }
 
       const loadSvgs = async (): Promise<void> => {
-        // const changedSvgPaths = svgs.filter(svg => !svgs.some(svg => svg.path.length === svgPath.length && svg.path.every((item, index) => svgPath[index] === item)))
+        const absoluteData = data as Data
 
-        // anySvgsChanged = changedSvgPaths.length > 0
+        for (let svgIndex = 0; svgIndex < svgs.length;) {
+          const svg = svgs[svgIndex] as Svg
 
-        // await Promise.all(changedSvgPaths.map(async svg => {
-        //   const text = await fileSystem.readUtf8EncodedTextFile(svg)
-        //   const optimized = minifySvg(text)
-        //   svgs.push({ path: svg, ...separateAttributesAndContentOfSvg(optimized) })
-        // }))
-        // TODO
+          if (absoluteData.svgPaths.some(svgPath => svgPath.length === svg.path.length && svgPath.every((item, itemIndex) => item === svg.path[itemIndex]))) {
+            svgIndex++
+          } else {
+            svgs.splice(svgIndex, 1)
+          }
+        }
+
+        const svgPathsToLoad = absoluteData.svgPaths.filter(svgPath => !svgs.some(svg => svg.path.length === svgPath.length && svg.path.every((item, itemIndex) => item === svgPath[itemIndex])))
+
+        anySvgsChanged = svgPathsToLoad.length > 0
+
+        await Promise.all(svgPathsToLoad.map(async svgPath => {
+          const text = await fileSystem.readUtf8EncodedTextFile(svgPath)
+          const optimized = minifySvg(text)
+          svgs.push({ path: svgPath, ...separateAttributesAndContentOfSvg(optimized) })
+        }))
       }
 
       if (skitscriptChanged) {
@@ -124,13 +136,7 @@ export const compile = async (fileSystem: FileSystem): Promise<{
                       throw new Error('TODO')
 
                     case 'valid':
-                    {
-                      const transpiled = transpileMap(ourMap)
-
-                      data = transpiled.data
-                      sassLines = transpiled.sassLines
-                      svgPaths = transpiled.svgPaths
-                    }
+                      data = transpileMap(ourMap)
                   }
                 }
               }
@@ -167,7 +173,32 @@ export const compile = async (fileSystem: FileSystem): Promise<{
       await Promise.all(initialPromises)
 
       if (skitscriptChanged || pugTemplateChanged || sassChanged || anySvgsChanged) {
-        const html = (pugTemplate as compileTemplate)({ css, ...data })
+        const absoluteData = data as Data
+
+        const converted: WebData = {
+          css: css as string,
+          javascript: '',
+          states: absoluteData.data.states,
+          characters: absoluteData.data.characters.map((character): WebCharacter => ({
+            normalized: character.normalized,
+            element: {
+              tagName: 'div',
+              attributes: {}, // TODO
+              content: {
+                emotes: character.element.content.emotes.map((emote): WebEmote => ({
+                  normalized: emote.normalized,
+                  element: convertImage(emote)
+                }))
+              }
+            }
+          })),
+          backgrounds: absoluteData.data.backgrounds.map((background): WebBackground => ({
+            normalized: background.normalized,
+            element: convertImage(background)
+          }))
+        }
+
+        const html = (pugTemplate as compileTemplate)(converted)
         await fileSystem.writeUtf8EncodedTextFile(['index.html'], minifyHtml(html))
       }
     }

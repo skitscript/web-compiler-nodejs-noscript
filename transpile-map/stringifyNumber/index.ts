@@ -1,7 +1,7 @@
 // TODO: there might be better character sets than this.
 const characterSet = 'abcdefghijklmnopqrstuvwxyz'
 
-const stringifyNumber = (number: number): string => {
+export const stringifyNumber = (number: number): string => {
   if (number === 0) {
     return 'a'
   }
